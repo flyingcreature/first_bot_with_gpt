@@ -2,11 +2,14 @@ import telebot
 from telebot.types import Message
 from dotenv import load_dotenv
 from os import getenv
+from gpt import GPT
 
 load_dotenv()
 token = getenv("BOT_TOKEN")
 
 bot = telebot.TeleBot(token)
+
+gpt = GPT(system_content="Ты дружелюбный помощник по математике")
 
 
 @bot.message_handler(commands=['start'])
@@ -22,17 +25,10 @@ def start_command(message: Message):
 def help_command(message: Message):
     bot.send_message(
         chat_id=message.chat.id,
-        text="Я твой цифровой собеседник. Узнать обо мне подробнее можно командой /about"
+        text="Я твой цифровой собеседник."
     )
 
 
-@bot.message_handler(commands=['about'])
-def about_command(message: Message):
-    text = "Рад, что ты заинтересован_а! Мое предназначение — не оставлять тебя в одиночестве и всячески подбадривать!"
-    bot.send_message(
-        chat_id=message.chat.id,
-        text=text
-    )
 
 
 def filter_hello(message):
@@ -61,11 +57,15 @@ def say_bye(message: Message):
         text="Пока, заходи ещё!"
     )
 
-@bot.message_handler(commands=['GPT_assistant'])
+
+@bot.message_handler(commands=['gpt'])
 def solve_task(message):
     bot.send_message(
         chat_id=message.chat.id,
-        text="Следующим сообщением напиши промт"
+        text="Следующим сообщением напиши промт\n"
+             "Можешь ввести любую задачу, и я постараюсь её решить\n\n"
+             "-Если напишешь 'продолжи', я продолжу объяснять задачу\n\n"
+             "-Для завершения диалога напиши 'конец'"
     )
     bot.register_next_step_handler(
         message,
@@ -91,6 +91,41 @@ def get_promt(message):
         chat_id=message.chat.id,
         text="Промт принят!"
     )
+
+    if user_promt.lower() == "конец":
+        gpt.clear_history()
+        return
+
+    request_tokens = gpt.count_tokens(user_promt)
+    if request_tokens > gpt.MAX_TOKENS:
+        bot.send_message(
+            chat_id=message.chat.id,
+            text="Запрос несоответствует кол-ву токенов. Исправьте запрос!"
+        )
+        bot.register_next_step_handler(
+            message,
+            get_promt
+        )
+
+    if user_promt.lower() == "продолжи":
+        gpt.clear_history()
+
+    json = gpt.make_promt(user_promt)
+
+    resp = gpt.send_request(json)
+
+    response = gpt.send_request(resp)
+    if not response[0]:
+        bot.send_message(
+            chat_id=message.chat.id,
+            text="Не удалось выполнить запрос..."
+        )
+    bot.send_message(
+        chat_id=message.chat.id,
+        text=response[1]
+    )
+
+
 
 
 @bot.message_handler(func=lambda message: True, content_types=['audio', 'photo', 'voice', 'video', 'document',
