@@ -2,8 +2,12 @@ import requests
 import logging
 from transformers import AutoTokenizer
 
-logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    filename="log_file.txt",
+    filemode="w",
+)
 
 
 class GPT:
@@ -25,33 +29,31 @@ class GPT:
         # Проверка статус кода
         if response.status_code < 200 or response.status_code >= 300:
             self.clear_history()
-            error_msg = f"Ошибка: {response.status_code}"
-            logger.error(error_msg)
-            return False, error_msg
+
+            logging.error(f"Ошибка: {response.status_code}")
+            return False, "Ошибка статус кода"
 
         # Проверка json
         try:
             full_response = response.json()
         except:
             self.clear_history()
+            logging.error("Ошибка получения JSON")
             return False, "Ошибка получения JSON"
 
         # Проверка сообщения об ошибке
         if "error" in full_response or 'choices' not in full_response:
             self.clear_history()
+            logging.error(f"Ошибка: {full_response}")
             return False, f"Ошибка: {full_response}"
 
-        # Результат
         result = full_response['choices'][0]['message']['content']
 
-        # Пустой результат == объяснение закончено
-        # Твой код ниже
-        # if result == ''
         if not result:
             self.clear_history()
+            logging.info("Объяснение закончено!")
             return True, 'Объяснение закончено!'
 
-        # Сохраняем сообщение в историю
         self.save_history(result)
         return True, self.assistant_content
 
@@ -73,12 +75,8 @@ class GPT:
         resp = requests.post(url=self.URL, headers=self.HEADERS, json=json)
         return resp
 
-    # Сохраняем историю общения
     def save_history(self, content_response):
-        # Твой код ниже
         self.assistant_content = self.assistant_content + content_response + ' '
 
-    # Очистка истории общения
     def clear_history(self):
-        # Твой код ниже
         self.assistant_content = "Решим задачу по шагам: "
