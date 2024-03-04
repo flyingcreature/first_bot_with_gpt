@@ -1,82 +1,55 @@
-import requests
 import logging
+
+import requests
 from transformers import AutoTokenizer
 
+from config import GPT_URL, LOGS_PATH, MODEL_NAME
+
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filename="log_file.txt",
+    filename=LOGS_PATH,
+    level=logging.DEBUG,
+    format="%(asctime)s %(message)s",
     filemode="w",
 )
 
 
-class GPT:
-    def __init__(self, system_content=""):
-        self.system_content = system_content
-        self.URL = 'http://localhost:1234/v1/chat/completions'
-        self.HEADERS = {"Content-Type": "application/json"}
-        self.MAX_TOKENS = 150
-        self.assistant_content = "Решим задачу по шагам: "
+def count_tokens(text: str) -> int:
+    """
+    Считает количество токенов модели в переданной строке
+    """
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    return len(tokenizer.encode(text))
 
-    # Подсчитываем количество токенов в промте
-    @staticmethod
-    def count_tokens(prompt):
-        tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2")  # название модели
-        return len(tokenizer.encode(prompt))
 
-    # Проверка ответа на возможные ошибки и его обработка
-    def process_resp(self, response) -> [bool, str]:
-        # Проверка статус кода
-        if response.status_code < 200 or response.status_code >= 300:
-            self.clear_history()
+def ask_gpt_helper(task: str, previous_answer="") -> str:
+    """
+    Отправляет запрос к модели GPT с задачей и предыдущим ответом
+    для получения ответа или следующего шага
+    """
+    system_content = "Давай краткий ответ с решением на русском языке"
+    assistant_content = "Решим задачу по шагам: " + previous_answer
+    temperature = 1
+    max_tokens = 64
 
-            logging.error(f"Ошибка: {response.status_code}")
-            return False, "Ошибка статус кода"
-
-        # Проверка json
-        try:
-            full_response = response.json()
-        except:
-            self.clear_history()
-            logging.error("Ошибка получения JSON")
-            return False, "Ошибка получения JSON"
-
-        # Проверка сообщения об ошибке
-        if "error" in full_response or 'choices' not in full_response:
-            self.clear_history()
-            logging.error(f"Ошибка: {full_response}")
-            return False, f"Ошибка: {full_response}"
-
-        result = full_response['choices'][0]['message']['content']
-
-        if not result:
-            self.clear_history()
-            logging.info("Объяснение закончено!")
-            return True, 'Объяснение закончено!'
-
-        self.save_history(result)
-        return True, self.assistant_content
-
-    # Формирование промта
-    def make_promt(self, user_request):
-        json = {
+    response = requests.post(
+        GPT_URL,
+        headers={"Content-Type": "application/json"},
+        json={
             "messages": [
-                {"role": "system", "content": self.system_content},
-                {"role": "user", "content": user_request},
-                {"role": "assistant", "content": self.assistant_content},
+                {"role": "user", "content": task},
+                {"role": "system", "content": system_content},
+                {"role": "assistant", "content": assistant_content},
             ],
-            "temperature": 1.2,
-            "max_tokens": self.MAX_TOKENS,
-        }
-        return json
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        },
+    )
+    if response.status_code == 200:
+        result = response.json()["choices"][0]["message"]["content"]
+        print("Ответ получен!")
+        logging.debug(f"Отправлено: {task}\nПолучен результат: {result}")
+        return result
+    else:
+        print("Не удалось получить ответ :(")
+        logging.error(f"Отправлено: {task}\nПолучена ошибка: {response.json()}")
 
-    # Отправка запроса
-    def send_request(self, json):
-        resp = requests.post(url=self.URL, headers=self.HEADERS, json=json)
-        return resp
-
-    def save_history(self, content_response):
-        self.assistant_content = self.assistant_content + content_response + ' '
-
-    def clear_history(self):
-        self.assistant_content = "Решим задачу по шагам: "
