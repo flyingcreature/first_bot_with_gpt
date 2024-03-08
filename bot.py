@@ -1,5 +1,5 @@
 import telebot
-from telebot.types import Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telebot.types import Message, ReplyKeyboardRemove
 from dotenv import load_dotenv
 from os import getenv
 from config import LOGS_PATH, MAX_TASK_TOKENS, USER_DATA_PATH
@@ -11,11 +11,20 @@ token = getenv("BOT_TOKEN")
 
 bot = telebot.TeleBot(token)
 
-
 user_data = load_data(USER_DATA_PATH)
 
+currect_subjects = {}
+currect_levels = {}
+currect_tasks = {}
+currect_answers = {}
 
-# Обработчик команды /start
+# Инициализируем словарь соответствия: "команда": "название предмета"
+COMMAND_TO_SUBJECT = {
+    "math": "математика",
+    "rus": "русский язык"
+}
+
+
 @bot.message_handler(commands=["start"])
 def start(message):
     user_name = message.from_user.username
@@ -36,16 +45,45 @@ def start(message):
         "Иногда ответы получаются слишком длинными - в этом случае ты можешь попросить продолжить.",
         reply_markup=create_keyboard(["Задать новый вопрос"]),
     )
-    bot.register_next_step_handler(message, solve_task)
 
 
-# Необходимый для обработки фильтр
-def filter_solve_task(message: Message) -> bool:
+def filter_send_keyboard_subject(message: Message) -> bool:
     return message.text == "Задать новый вопрос"
 
 
 # Обработчик запроса "Задать новый вопрос"
-@bot.message_handler(func=filter_solve_task)
+@bot.message_handler(func=filter_send_keyboard_subject)
+def send_keyboard_subject(message):
+    user_id = message.chat.id
+    bot.send_message(
+            user_id,
+            "Выбери предмет",
+            reply_markup=create_keyboard(["math", "rus"])
+        )
+
+
+def filter_choose_subject(message):
+    return message.text in ["math", "rus"]
+
+
+@bot.message_handler(func=filter_choose_subject)
+def choose_subject(message):
+    user_id = message.chat.id
+    subject = COMMAND_TO_SUBJECT.get(message.text)  # Получаем из словаря название предмета
+    currect_subjects[user_id] = subject  # Запоминаем его
+    print(subject)
+    bot.register_next_step_handler(message, solve_task)
+
+    # Это следующий этап страданий
+    # if  subject != 'math':  # Если у нас нет названия предмета
+    #     bot.send_message(message.chat.id, "Пожалуйста, выбери предмет, введя одну из команд",
+    #                      # Возвращаемся к предыдущему этапу
+    #                      reply_markup=create_keyboard(['', '']))
+    #     print("не получилось")
+    #     return  # И выходим из функции
+
+# Необходимый для обработки фильтр
+
 def solve_task(message):
     bot.send_message(message.chat.id, "Напиши условие задачи:")
     bot.register_next_step_handler(message, give_answer)
@@ -165,7 +203,8 @@ def help_command(message: Message):
     )
     bot.send_message(
         chat_id=message.chat.id,
-        text=text
+        text=text,
+        reply_markup=ReplyKeyboardRemove()
     )
 
 
@@ -226,14 +265,3 @@ def send_echo(message: Message):
 
 logging.info("Бот запущен")
 bot.infinity_polling(none_stop=True)
-
-
-
-
-
-
-
-
-
-
-

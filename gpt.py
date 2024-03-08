@@ -22,11 +22,12 @@ def count_tokens(text: str) -> int:
 
 
 def ask_gpt_helper(task: str, previous_answer="") -> str:
+
     """
     Отправляет запрос к модели GPT с задачей и предыдущим ответом
     для получения ответа или следующего шага
     """
-    system_content = "Давай краткий ответ с решением на русском языке"
+    system_content = "Ты дружелюбный помощник по математике"
     assistant_content = "Решим задачу по шагам: " + previous_answer
     temperature = 1
     max_tokens = 64
