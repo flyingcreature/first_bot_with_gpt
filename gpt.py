@@ -21,14 +21,14 @@ def count_tokens(text: str) -> int:
     return len(tokenizer.encode(text))
 
 
-def ask_gpt_helper(task: str, previous_answer="") -> str:
-
+def ask_gpt_helper(task: str, subjects: str, levels: str, previous_answer="") -> str:
     """
     Отправляет запрос к модели GPT с задачей и предыдущим ответом
     для получения ответа или следующего шага
     """
-    system_content = "Ты дружелюбный помощник по математике"
-    assistant_content = "Решим задачу по шагам: " + previous_answer
+
+    system_content = f"Ты дружелюбный помощник по {subjects}"
+    assistant_content = f"Объясняй, как для {levels}. Решим задачу по шагам: " + previous_answer
     temperature = 1
     max_tokens = 64
 
@@ -45,6 +45,8 @@ def ask_gpt_helper(task: str, previous_answer="") -> str:
             "max_tokens": max_tokens,
         },
     )
+    print(assistant_content)
+    print(system_content)
     if response.status_code == 200:
         result = response.json()["choices"][0]["message"]["content"]
         print("Ответ получен!")

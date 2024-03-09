@@ -2,26 +2,26 @@ import telebot
 from telebot.types import Message, ReplyKeyboardRemove
 from dotenv import load_dotenv
 from os import getenv
-from config import LOGS_PATH, MAX_TASK_TOKENS, USER_DATA_PATH
+from config import LOGS_PATH, MAX_TASK_TOKENS
 from gpt import ask_gpt_helper, count_tokens, logging
-from utils import create_keyboard, load_data, save_data
+from utils import create_keyboard
 
 load_dotenv()
 token = getenv("BOT_TOKEN")
 
 bot = telebot.TeleBot(token)
 
-user_data = load_data(USER_DATA_PATH)
+user_data = {}
+# Инициализируем словарь соответствия: "команда": "то, что пойдет в промты gpt"
 
-currect_subjects = {}
-currect_levels = {}
-currect_tasks = {}
-currect_answers = {}
+command_to_subject = {
+    "math": "математике",
+    "rus": "русскому языку"
+}
 
-# Инициализируем словарь соответствия: "команда": "название предмета"
-COMMAND_TO_SUBJECT = {
-    "math": "математика",
-    "rus": "русский язык"
+command_to_level = {
+    "beginner": "начинающего",
+    "advanced": "продвинутого"
 }
 
 
@@ -30,13 +30,15 @@ def start(message):
     user_name = message.from_user.username
     user_id = message.chat.id
 
-    if str(user_id) not in user_data:
-        user_data[str(user_id)] = {
+    if user_id not in user_data:
+        user_data[user_id] = {
             "user_name": user_name,
-            "current_task": None,
-            "current_answer": None,
+            "current_subjects": "",
+            "current_levels": "",
+            "current_tasks": "",
+            "current_answers": ""
         }
-        save_data(user_data, USER_DATA_PATH)
+        print(user_data)
 
     bot.send_message(
         user_id,
@@ -48,59 +50,99 @@ def start(message):
 
 
 def filter_send_keyboard_subject(message: Message) -> bool:
-    return message.text == "Задать новый вопрос"
+    return message.text.lower() in ["задать новый вопрос", "изменить предмет/сложность"]
 
 
-# Обработчик запроса "Задать новый вопрос"
 @bot.message_handler(func=filter_send_keyboard_subject)
 def send_keyboard_subject(message):
     user_id = message.chat.id
-    bot.send_message(
+    if user_data[user_id]["current_subjects"] == "" or message.text.lower() == "изменить предмет/сложность":
+        bot.send_message(
             user_id,
             "Выбери предмет",
             reply_markup=create_keyboard(["math", "rus"])
         )
+        bot.register_next_step_handler(message, choose_subject)
+
+    else:
+        bot.send_message(
+            user_id,
+            "Напиши условие задачи:",
+        )
+        bot.register_next_step_handler(message, give_answer)
 
 
 def filter_choose_subject(message):
-    return message.text in ["math", "rus"]
+    return message.text.lower() in ["math", "rus"]
 
 
+# Обработка нужного предмета
 @bot.message_handler(func=filter_choose_subject)
-def choose_subject(message):
+def choose_subject(message: Message):
     user_id = message.chat.id
-    subject = COMMAND_TO_SUBJECT.get(message.text)  # Получаем из словаря название предмета
-    currect_subjects[user_id] = subject  # Запоминаем его
-    print(subject)
-    bot.register_next_step_handler(message, solve_task)
+    if message.text.lower() not in ["math", "rus"]:
+        bot.send_message(
+            user_id,
+            "Выбери предмет из предложенных вариантов ('math' или 'rus')",
+        )
+        bot.register_next_step_handler(message, choose_subject)  # Запрашиваем у пользователя выбор предмета повторно
+    else:
+        text = (
+            "Выбери уровень сложности ответа:\n"     
+            "beginner - начинающий\n"
+            "advanced - продвинутый"
+            )
 
-    # Это следующий этап страданий
-    # if  subject != 'math':  # Если у нас нет названия предмета
-    #     bot.send_message(message.chat.id, "Пожалуйста, выбери предмет, введя одну из команд",
-    #                      # Возвращаемся к предыдущему этапу
-    #                      reply_markup=create_keyboard(['', '']))
-    #     print("не получилось")
-    #     return  # И выходим из функции
+        subject = command_to_subject.get(message.text.lower())  # Получаем из словаря название предмета
+        user_data[user_id]["current_subjects"] = subject  # Запоминаем выбранный предмет
+        print(subject)
+        print(user_data)
+        bot.send_message(
+            user_id,
+            text=text,
+            reply_markup=create_keyboard(["Beginner", "Advanced"])
+        )
+        bot.register_next_step_handler(message, choose_level)
 
-# Необходимый для обработки фильтр
 
-def solve_task(message):
-    bot.send_message(message.chat.id, "Напиши условие задачи:")
-    bot.register_next_step_handler(message, give_answer)
+def filter_choose_level(message):
+    return message.text.lower() in ["beginner", "аdvanced"]
+
+
+# Обработка нужного уровня
+@bot.message_handler(func=filter_choose_level)
+def choose_level(message: Message):
+    user_id = message.chat.id
+    if message.text.lower() not in ["beginner", "advanced"]:
+        bot.send_message(
+            user_id,
+            text="Выбери уровень сложности ответа из предложенных вариантов ('Beginner' или 'Advanced')"
+        )
+        bot.register_next_step_handler(message, choose_level)
+    else:
+        levels = command_to_level.get(message.text.lower())  # Получаем из словаря уровень сложности
+        user_data[user_id]["current_levels"] = levels  # Запоминаем выбранный уровень
+        print(levels)
+        print(user_data)
+        bot.send_message(
+            user_id,
+            "Напиши условие задачи:",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        bot.register_next_step_handler(message, give_answer)
 
 
 def give_answer(message: Message):
     user_id = message.chat.id
+    # Достаём из словаря предмет и lvl, что бы включить его в блок с gpt
+    subject = user_data[user_id]["current_subjects"]
+    levels = user_data[user_id]["current_levels"]
 
     if count_tokens(message.text) <= MAX_TASK_TOKENS:  # Если уложились в лимит токенов
         bot.send_message(message.chat.id, "Решаю...")
-        answer = ask_gpt_helper(message.text)  # Получаем ответ от gpt
-
-        user_data[str(user_id)][
-            "current_task"
-        ] = message.text  # Запоминаем текущую задачу
-        user_data[str(user_id)]["current_answer"] = answer  # Запоминаем ответ gpt
-        save_data(user_data, USER_DATA_PATH)
+        answer = ask_gpt_helper(message.text, subject, levels)  # Получаем ответ от gpt
+        user_data[user_id]["current_tasks"] = message.text  # Запоминаем текущую задачу
+        user_data[user_id]["current_answers"] = answer  # Запоминаем ответ gpt
 
         if answer is None:  # Если ошибка в gpt
             bot.send_message(
@@ -122,14 +164,13 @@ def give_answer(message: Message):
                 user_id,
                 answer,
                 reply_markup=create_keyboard(
-                    ["Задать новый вопрос", "Продолжить объяснение"]
+                    ["Задать новый вопрос", "Продолжить объяснение", "Изменить предмет/сложность"]
                 ),
             )
 
     else:  # Если задача слишком большая
-        user_data[str(user_id)]["current_task"] = None
-        user_data[str(user_id)]["current_answer"] = None
-        save_data(user_data, USER_DATA_PATH)
+        user_data[user_id]["current_tasks"] = ""  # Обнуляем текущую задачу
+        user_data[user_id]["current_answers"] = ""  # Обнуляем ответ gpt
 
         bot.send_message(
             message.chat.id,
@@ -149,9 +190,7 @@ def filter_continue_explaining(message: Message) -> bool:
 def continue_explaining(message: Message):
     user_id = message.chat.id
 
-    if not user_data[str(user_id)][
-        "current_task"
-    ]:  # Если просят продолжить, но ещё не ввели задачу
+    if user_data[user_id]["current_tasks"] == "":  # Если просят продолжить, но ещё не ввели задачу
         bot.send_message(
             user_id,
             "Для начала напиши условие задачи:",
@@ -161,34 +200,34 @@ def continue_explaining(message: Message):
     else:
         bot.send_message(user_id, "Формулирую продолжение...")
         answer = ask_gpt_helper(
-            user_data[str(user_id)]["current_task"],
-            user_data[str(user_id)]["current_answer"],
+            user_data[user_id]["current_tasks"],
+            user_data[user_id]["current_subjects"],
+            user_data[user_id]["current_levels"],
+            user_data[user_id]["current_answers"]
         )
-        user_data[str(user_id)][
-            "current_answer"
-        ] += answer  # Добавляем новый кусочек объяснения к сохранённому ответу
-        save_data(user_data, USER_DATA_PATH)
+        user_data[user_id]["current_answers"] += answer  # Добавляем новый кусочек объяснения к сохранённому ответу
 
         if answer is None:  # Если ошибка gpt
             bot.send_message(
                 user_id,
                 "Не могу получить ответ от GPT :(",
-                reply_markup=create_keyboard(["Задать новый вопрос"]),
+                reply_markup=create_keyboard(["Задать новый вопрос", "Изменить предмет/сложность"]),
             )
         elif answer == "":  # Если пустой ответ, продолжать некуда
             bot.send_message(
                 user_id,
                 "Задача полностью решена ^-^",
-                reply_markup=create_keyboard(["Задать новый вопрос"]),
+                reply_markup=create_keyboard(["Задать новый вопрос", "Изменить предмет/сложность"]),
             )
         else:
             bot.send_message(
                 user_id,
                 answer,
                 reply_markup=create_keyboard(
-                    ["Задать новый вопрос", "Продолжить объяснение"]
+                    ["Задать новый вопрос", "Продолжить объяснение", "Изменить предмет/сложность"]
                 ),
             )
+
 
 
 @bot.message_handler(commands=['help'])
