@@ -1,5 +1,9 @@
 from telebot.types import ReplyKeyboardMarkup
 
+import logging
+
+from config import LOGS_PATH
+
 
 def create_keyboard(buttons: list[str]) -> ReplyKeyboardMarkup:
     """
@@ -9,3 +13,10 @@ def create_keyboard(buttons: list[str]) -> ReplyKeyboardMarkup:
     keyboard.add(*buttons)
     return keyboard
 
+
+logging.basicConfig(
+    filename=LOGS_PATH,
+    level=logging.DEBUG,
+    format="%(asctime)s %(message)s",
+    filemode="w",
+)

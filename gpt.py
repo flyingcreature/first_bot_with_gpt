@@ -1,16 +1,9 @@
-import logging
+from utils import logging
 
 import requests
 from transformers import AutoTokenizer
 
-from config import GPT_URL, LOGS_PATH, MODEL_NAME
-
-logging.basicConfig(
-    filename=LOGS_PATH,
-    level=logging.DEBUG,
-    format="%(asctime)s %(message)s",
-    filemode="w",
-)
+from config import GPT_URL, MODEL_NAME
 
 
 def count_tokens(text: str) -> int:
@@ -21,14 +14,14 @@ def count_tokens(text: str) -> int:
     return len(tokenizer.encode(text))
 
 
-def ask_gpt_helper(task: str, subjects: str, levels: str, previous_answer="") -> str:
+def ask_gpt_helper(task: str, subject: str, level: str, previous_answer="") -> str:
     """
     Отправляет запрос к модели GPT с задачей и предыдущим ответом
     для получения ответа или следующего шага
     """
 
-    system_content = f"Ты дружелюбный помощник по {subjects}"
-    assistant_content = f"Объясняй, как для {levels}. Решим задачу по шагам: " + previous_answer
+    system_content = f"Ты дружелюбный помощник по {subject}"
+    assistant_content = f"Объясняй, как для {level}. Решим задачу по шагам: " + previous_answer
     temperature = 1
     max_tokens = 64
 
@@ -45,8 +38,7 @@ def ask_gpt_helper(task: str, subjects: str, levels: str, previous_answer="") ->
             "max_tokens": max_tokens,
         },
     )
-    print(assistant_content)
-    print(system_content)
+
     if response.status_code == 200:
         result = response.json()["choices"][0]["message"]["content"]
         print("Ответ получен!")
