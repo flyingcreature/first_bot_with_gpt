@@ -15,3 +15,4 @@ MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # Название испол
 
 MAX_TASK_TOKENS = 150  # Максимальный размер запроса
 
+db_table = 'sqlite3.db'  # Таблица SQL

@@ -2,17 +2,19 @@ import telebot
 from telebot.types import Message, ReplyKeyboardRemove
 from dotenv import load_dotenv
 from os import getenv
-from config import LOGS_PATH, MAX_TASK_TOKENS
+from config import LOGS_PATH, MAX_TASK_TOKENS, db_table
 from gpt import ask_gpt_helper, count_tokens, logging
 from utils import create_keyboard
+from database import (prepare_database, add_user, update_user_subject,
+                      update_user_level, update_user_task, update_user_answer, delete_user, get_user)
 
 load_dotenv()
 token = getenv("BOT_TOKEN")
 
 bot = telebot.TeleBot(token)
 
-user_data = {}
-# Инициализируем словарь соответствия: "команда": "то, что пойдет в промты gpt"
+prepare_database()  # Создаем sql таблицу
+
 
 command_to_subject = {
     "math": "математике",
@@ -30,16 +32,17 @@ def start(message):
     user_name = message.from_user.username
     user_id = message.chat.id
 
-    if user_id not in user_data:
-        user_data[user_id] = {
-            "user_name": user_name,
-            "current_subjects": "",
-            "current_levels": "",
-            "current_tasks": "",
-            "current_answers": ""
-        }
-        print(user_data)
-
+    if user_id not in db_table:
+        add_user(
+            db_table,
+            user_id,
+            user_name,
+            None,
+            None,
+            None,
+            None
+        )
+        get_user(db_table)
     bot.send_message(
         user_id,
         f"Привет, {user_name} 👋! Я бот-помощник для решения задач по разным предметам!\n"
